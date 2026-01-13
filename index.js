@@ -5,10 +5,15 @@ const fs = require('fs');
 const axios = require('axios');
 
 const app = express();
+
+// Configura CORS para aceitar apenas o frontend
 app.use(cors({
-    origin: "https://caua-vosc.github.io/RFI-2.1", // URL do frontend no GitHub Pages
+    origin: "https://caua-vosc.github.io/RFI-2.1",
     methods: ["GET", "POST"],
     allowedHeaders: ["Content-Type"]
+}));
+
+app.use(express.json());
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -37,53 +42,41 @@ async function getAccessToken() {
   return res.data.access_token;
 }
 
-// CRIA PASTA SE NÃO EXISTIR
-async function createFolder(token, path) {
-  const url = `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root:/${path}`;
-  try {
-    await axios.get(url, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-  } catch {
-    await axios.post(
-      `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root/children`,
-      {
-        name: path.split('/')[0],
-        folder: {},
-        "@microsoft.graph.conflictBehavior": "replace"
-      },
-      { headers: { Authorization: `Bearer ${token}` } }
-    );
-  }
-}
-
-// UPLOAD
+// UPLOAD PARA ONEDRIVE
 async function uploadToOneDrive(token, siteId, section, file) {
   const folderPath = `${siteId}/${section}`;
 
-  // cria pasta do site
-  await axios.post(
-    `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root/children`,
-    {
-      name: siteId,
-      folder: {},
-      "@microsoft.graph.conflictBehavior": "ignore"
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  // Cria pasta do site se não existir
+  try {
+    await axios.post(
+      `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root/children`,
+      {
+        name: siteId,
+        folder: {},
+        "@microsoft.graph.conflictBehavior": "ignore"
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  } catch (err) {
+    console.warn(`Erro ao criar pasta do site: ${err.message}`);
+  }
 
-  // cria pasta da seção
-  await axios.post(
-    `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root:/${siteId}:/children`,
-    {
-      name: section,
-      folder: {},
-      "@microsoft.graph.conflictBehavior": "ignore"
-    },
-    { headers: { Authorization: `Bearer ${token}` } }
-  );
+  // Cria pasta da seção se não existir
+  try {
+    await axios.post(
+      `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root:/${siteId}:/children`,
+      {
+        name: section,
+        folder: {},
+        "@microsoft.graph.conflictBehavior": "ignore"
+      },
+      { headers: { Authorization: `Bearer ${token}` } }
+    );
+  } catch (err) {
+    console.warn(`Erro ao criar pasta da seção: ${err.message}`);
+  }
 
-  // upload arquivo
+  // Faz upload do arquivo
   const url = `https://graph.microsoft.com/v1.0/drives/${DRIVE_ID}/root:/${folderPath}/${file.originalname}:/content`;
   const stream = fs.createReadStream(file.path);
 
@@ -94,14 +87,14 @@ async function uploadToOneDrive(token, siteId, section, file) {
     }
   });
 
-  fs.unlinkSync(file.path);
+  fs.unlinkSync(file.path); // remove arquivo local após upload
 }
 
-// ENDPOINT
+// ENDPOINT DE UPLOAD
 app.post('/upload', upload.array('photos', 10), async (req, res) => {
   const { siteId, section } = req.body;
 
-  if (!siteId || !section || !req.files.length)
+  if (!siteId || !section || !req.files?.length)
     return res.status(400).json({ error: 'Dados incompletos' });
 
   try {
@@ -121,4 +114,5 @@ app.post('/upload', upload.array('photos', 10), async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Backend rodando na porta ${PORT}`);
 });
+
 
