@@ -5,7 +5,10 @@ const fs = require('fs');
 const axios = require('axios');
 
 const app = express();
-app.use(cors());
+app.use(cors({
+    origin: "https://caua-vosc.github.io/RFI-2.1", // URL do frontend no GitHub Pages
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"]
 
 const upload = multer({ dest: 'uploads/' });
 
@@ -118,3 +121,4 @@ app.post('/upload', upload.array('photos', 10), async (req, res) => {
 app.listen(PORT, () => {
   console.log(`Backend rodando na porta ${PORT}`);
 });
+
